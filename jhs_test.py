@@ -1,12 +1,15 @@
+import io
+import msgpack
+import msgpack_numpy as m
 from jhs import JHS
-import torch, io
+import numpy as np
+
+m.patch()
+
 block1 = b'12345678'
 block2 = b'qwertyuiop'
-tensor = torch.rand((100,100),dtype=torch.half)
-buff = io.BytesIO()
-torch.save(tensor,buff)
-buff.seek(0)
-block3 = buff.read()
+arr = np.random.rand(100,100)
+block3 = msgpack.packb(arr)
 block4 = b'my name is jake and it is not eric'
 
 
@@ -33,8 +36,8 @@ with JHS(file_name='temp.jhs', map_name='map.jhsmap', mode='r') as j:
 	result, identifier = j.read_next_block()
 	assert result == block3
 
-	t = torch.load(io.BytesIO(block3))
-	assert torch.allclose(tensor,t)
+	a = msgpack.unpackb(block3)
+	assert np.allclose(arr,a)
 
 	result, identifier = j.read_next_block()
 	assert result == block4
@@ -50,8 +53,8 @@ with JHS(file_name='temp.jhs', map_name='map.jhsmap', mode='rc') as j:
 	result, identifier = j.read_next_block()
 	assert result == block3
 
-	t = torch.load(io.BytesIO(block3))
-	assert torch.allclose(tensor,t)
+	a = msgpack.unpackb(block3)
+	assert np.allclose(arr, a)
 
 	result, identifier = j.read_next_block()
 	assert result == block4
@@ -72,8 +75,8 @@ with JHS(file_name='temp.jhs', map_name='map.jhsmap', mode='r') as j:
 		if identifier != '#3':
 			assert result == block
 		else:
-			t = torch.load(io.BytesIO(block))
-			assert torch.allclose(tensor,t)
+			a = msgpack.unpackb(block)
+			assert np.allclose(arr, a)
 		result, identifier = j.read_next_block()
 
 print('ALL PASS')
