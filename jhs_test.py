@@ -1,82 +1,69 @@
 import io
 import msgpack
 import msgpack_numpy as m
-from bigsmallformat import BigSmallFormat
+from triplets_format import TripletsFormat
 import numpy as np
 
 m.patch()
 
-block1 = b'12345678'
-block2 = b'qwertyuiop'
-arr = np.random.rand(100,100)
-block3 = msgpack.packb(arr)
-block4 = b'my name is jake and it is not eric'
+arr1 = np.random.rand(441, 1, 1).astype('float16')
+arr2 = np.random.rand(441, 1000, 1000).astype('float16')
+arr3 = np.random.rand(441, 5, 5).astype('float16')
+arr4 = np.random.rand(441, 50, 50).astype('float16')
+
+
+with TripletsFormat(file_name='temp.bigdata', map_name='map.bigmap', mode='w') as j:
+	j.write_next_np(arr1, '#1')
+	j.write_next_np(arr2, '#2')
+	j.write_next_np(arr3, '#3')
 
 
 
-
-with BigSmallFormat(file_name='temp.big', map_name='map.small', mode='w') as j:
-	j.write_next_block(data=block1,identifier='#1')
-	j.write_next_block(data=block2,identifier='#2')
-	j.write_next_block(data=block3,identifier='#3')
+with TripletsFormat(file_name='temp.bigdata', map_name='map.bigmap', mode='a') as j:
+	j.write_next_np(arr4, '#4')
 
 
+with TripletsFormat(file_name='temp.bigdata', map_name='map.bigmap', mode='r') as j:
+	result, identifier = j.read_next_np()
+	assert np.all(result == arr1)
 
-with BigSmallFormat(file_name='temp.big', map_name='map.small', mode='a') as j:
-	j.write_next_block(data=block4,identifier='#4')
+	result, identifier = j.read_next_np()
+	assert np.all(result == arr2)
 
+	result, identifier = j.read_next_np()
+	assert np.all(result == arr3)
 
-with BigSmallFormat(file_name='temp.big', map_name='map.small', mode='r') as j:
-	result, identifier = j.read_next_block()
-	assert result == block1
-
-	result, identifier = j.read_next_block()
-	assert result == block2
-
-	result, identifier = j.read_next_block()
-	assert result == block3
-
-	a = msgpack.unpackb(block3)
-	assert np.allclose(arr,a)
-
-	result, identifier = j.read_next_block()
-	assert result == block4
+	result, identifier = j.read_next_np()
+	assert np.all(result == arr4)
 
 
-with BigSmallFormat(file_name='temp.big', map_name='map.small', mode='rc') as j:
-	result, identifier = j.read_next_block()
-	assert result == block1
+with TripletsFormat(file_name='temp.bigdata', map_name='map.bigmap', mode='rc') as j:
+	result, identifier = j.read_next_np()
+	assert np.all(result == arr1)
 
-	result, identifier = j.read_next_block()
-	assert result == block2
+	result, identifier = j.read_next_np()
+	assert np.all(result == arr2)
 
-	result, identifier = j.read_next_block()
-	assert result == block3
+	result, identifier = j.read_next_np()
+	assert np.all(result == arr3)
 
-	a = msgpack.unpackb(block3)
-	assert np.allclose(arr, a)
-
-	result, identifier = j.read_next_block()
-	assert result == block4
+	result, identifier = j.read_next_np()
+	assert np.all(result == arr4)
 
 
 d = {
-	'#1': 'block1',
-	'#2': 'block2',
-	'#3': 'block3',
-	'#4': 'block4'
+	'#1': 'arr1',
+	'#2': 'arr2',
+	'#3': 'arr3',
+	'#4': 'arr4'
 }
 
 
-with BigSmallFormat(file_name='temp.big', map_name='map.small', mode='r') as j:
-	result, identifier = j.read_next_block()
-	while result:
-		block = locals()[d[identifier]]
-		if identifier != '#3':
-			assert result == block
-		else:
-			a = msgpack.unpackb(block)
-			assert np.allclose(arr, a)
-		result, identifier = j.read_next_block()
+with TripletsFormat(file_name='temp.bigdata', map_name='map.bigmap', mode='r') as j:
+	result, identifier = j.read_next_np()
+	while identifier:
+		arr = locals()[d[identifier]]
+		assert np.all(result == arr)
+		result, identifier = j.read_next_np()
 
 print('ALL PASS')

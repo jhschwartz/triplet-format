@@ -1,19 +1,16 @@
 import io
 import os
 import random
-# from torch import IterableDataset
 from collections import OrderedDict
-
 import numpy as np
-import torch
 
 
-class BigSmallFormat:
+class TripletsFormat:
     def __init__(self, file_name: str, map_name: str, mode: str):
-        if not file_name.endswith('.big'):
-            raise Exception('data file extension must be .big')
-        if not map_name.endswith('.small'):
-            raise Exception('map file extension must be .small')
+        if not file_name.endswith('.bigdata'):
+            raise Exception('data file extension must be .bigdata')
+        if not map_name.endswith('.bigmap'):
+            raise Exception('map file extension must be .bigmap')
         if mode not in ['w', 'r', 'rc', 'a']:
             raise Exception('invalid file mode')
 
@@ -98,8 +95,12 @@ class BigSmallFormat:
     def __get_begin_byte_for_copy(self, identifier: str):
         return self.__copy_row_order[identifier][0]
 
-    def _get_num_bytes(self, identifier: str):
+    def __get_num_bytes(self, identifier: str):
         return self.__copy_row_order[identifier][1]
+
+    @staticmethod
+    def __num_bytes_to_L(num):
+        return int(np.sqrt(num / 441 / 2))
 
     def close(self):
         self.__file_stream.close()
@@ -117,59 +118,45 @@ class BigSmallFormat:
             os.rename(self.__copy_file_name, self.file_name)
             os.rename(self.__copy_map_name, self.map_name)
 
-    def write_next_block(self, data: bytes, identifier: str):
-        assert type(data) is bytes
-        block_size = len(data)  # number of bytes in bytes-string
-        begin_byte = self.total_bytes  # should this be +1 ??
-        self.__map_stream.write('{}\t{}\t{}\n'.format(identifier, begin_byte, block_size))
-        self.__file_stream.write(data)
-        self.total_bytes += block_size
-
-    def read_next_block(self):
-        line = self.__map_stream.readline()
-        if not line:
-            return False, False
-        identifier, begin_byte, block_size = line.split()
-        begin_byte, block_size = int(begin_byte), int(block_size)
-        data = self.__file_stream.read(block_size)
-
-        if self.mode == 'rc':
-            copy_begin_byte = self.__get_begin_byte_for_copy(identifier)
-            self.__copy_file_stream.seek(copy_begin_byte)
-            self.__copy_file_stream.write(data)
-
-        return data, identifier
-
-
-class TripletsFormat(BigSmallFormat):
-    @staticmethod
-    def __num_bytes_to_L(num):
-        return int(np.sqrt(num/441/2))
-
     @staticmethod
     def __encode(data):
         # formatted to binary
-        assert type(data) == np.array
+        assert type(data) == np.ndarray
         assert data.dtype == 'float16'
         assert data.shape[0] == 441
-        assert data.shape[1] == data.shape[2] # 441 x L x L
+        assert data.shape[1] == data.shape[2]  # 441 x L x L
         L = data.shape[1]
         data_bytes = data.tobytes(order='C')
         assert TripletsFormat.__num_bytes_to_L(len(data_bytes)) == L
         return data_bytes
 
     @staticmethod
-    def __decode(b, identifier):
-        num_bytes = super()._get_num_bytes(identifier)
+    def __decode(b):
+        num_bytes = len(b)
         L = TripletsFormat.__num_bytes_to_L(num_bytes)
-        buff = io.BytesIO(b)
-        data = np.frombuffer(buff, dtype='float16').reshape(441, L, L)
+        data = np.frombuffer(b, dtype='float16').reshape(441, L, L)
         return data
 
-    def write_next_block(self, data: np.ndarray, identifier: str):
-        b = TripletsFormat.__encode(data)
-        super().write_next_block(b, identifier)
+    def write_next_np(self, data_np: np.ndarray, identifier: str):
+        data_bytes = TripletsFormat.__encode(data_np)
+        block_size = len(data_bytes)  # number of bytes in bytes-string
+        begin_byte = self.total_bytes
+        self.__map_stream.write('{}\t{}\t{}\n'.format(identifier, begin_byte, block_size))
+        self.__file_stream.write(data_bytes)
+        self.total_bytes += block_size
 
-    def read_next_block(self):
-        b, identifier = super().read_next_block()
-        return TripletsFormat.__decode(b, identifier)
+    def read_next_np(self):
+        line = self.__map_stream.readline()
+        if not line:
+            return None, None
+        identifier, begin_byte, block_size = line.split()
+        begin_byte, block_size = int(begin_byte), int(block_size)
+        data_bytes = self.__file_stream.read(block_size)
+        data_np = TripletsFormat.__decode(data_bytes)
+
+        if self.mode == 'rc':
+            copy_begin_byte = self.__get_begin_byte_for_copy(identifier)
+            self.__copy_file_stream.seek(copy_begin_byte)
+            self.__copy_file_stream.write(data_bytes)
+
+        return data_np, identifier

@@ -1,6 +1,6 @@
 from torch.utils.data.dataset import T_co
 
-from bigsmallformat import BigSmallFormat
+from triplets_format import BigSmallFormat
 from torch.utils.data import IterableDataset, get_worker_info
 
 
