@@ -1,7 +1,7 @@
 import io
 import msgpack
 import msgpack_numpy as m
-from jhs import JHS
+from bigsmallformat import BigSmallFormat
 import numpy as np
 
 m.patch()
@@ -15,18 +15,18 @@ block4 = b'my name is jake and it is not eric'
 
 
 
-with JHS(file_name='temp.jhs', map_name='map.jhsmap', mode='w') as j:
+with BigSmallFormat(file_name='temp.big', map_name='map.small', mode='w') as j:
 	j.write_next_block(data=block1,identifier='#1')
 	j.write_next_block(data=block2,identifier='#2')
 	j.write_next_block(data=block3,identifier='#3')
 
 
 
-with JHS(file_name='temp.jhs', map_name='map.jhsmap', mode='a') as j:
+with BigSmallFormat(file_name='temp.big', map_name='map.small', mode='a') as j:
 	j.write_next_block(data=block4,identifier='#4')
 
 
-with JHS(file_name='temp.jhs', map_name='map.jhsmap', mode='r') as j:
+with BigSmallFormat(file_name='temp.big', map_name='map.small', mode='r') as j:
 	result, identifier = j.read_next_block()
 	assert result == block1
 
@@ -43,7 +43,7 @@ with JHS(file_name='temp.jhs', map_name='map.jhsmap', mode='r') as j:
 	assert result == block4
 
 
-with JHS(file_name='temp.jhs', map_name='map.jhsmap', mode='rc') as j:
+with BigSmallFormat(file_name='temp.big', map_name='map.small', mode='rc') as j:
 	result, identifier = j.read_next_block()
 	assert result == block1
 
@@ -68,7 +68,7 @@ d = {
 }
 
 
-with JHS(file_name='temp.jhs', map_name='map.jhsmap', mode='r') as j:
+with BigSmallFormat(file_name='temp.big', map_name='map.small', mode='r') as j:
 	result, identifier = j.read_next_block()
 	while result:
 		block = locals()[d[identifier]]

@@ -4,13 +4,16 @@ import random
 # from torch import IterableDataset
 from collections import OrderedDict
 
+import numpy as np
+import torch
 
-class JHS:
+
+class BigSmallFormat:
     def __init__(self, file_name: str, map_name: str, mode: str):
-        if not file_name.endswith('.jhs'):
-            raise Exception('file extension must be .jhs')
-        if not map_name.endswith('.jhsmap'):
-            raise Exception('map extension must be .jhsmap')
+        if not file_name.endswith('.big'):
+            raise Exception('data file extension must be .big')
+        if not map_name.endswith('.small'):
+            raise Exception('map file extension must be .small')
         if mode not in ['w', 'r', 'rc', 'a']:
             raise Exception('invalid file mode')
 
@@ -41,7 +44,7 @@ class JHS:
         return self
 
     def __exit__(self, ex_type, ex_value, ex_traceback):
-        self.__close()
+        self.close()
 
     def __open_append(self):
         self.__file_stream = open(self.file_name, 'ab')
@@ -95,7 +98,10 @@ class JHS:
     def __get_begin_byte_for_copy(self, identifier: str):
         return self.__copy_row_order[identifier][0]
 
-    def __close(self):
+    def _get_num_bytes(self, identifier: str):
+        return self.__copy_row_order[identifier][1]
+
+    def close(self):
         self.__file_stream.close()
         self.__map_stream.close()
 
@@ -110,8 +116,6 @@ class JHS:
             # rename new
             os.rename(self.__copy_file_name, self.file_name)
             os.rename(self.__copy_map_name, self.map_name)
-
-    # close = __close
 
     def write_next_block(self, data: bytes, identifier: str):
         assert type(data) is bytes
@@ -136,33 +140,36 @@ class JHS:
 
         return data, identifier
 
-# class TripletDataset(JHS, IterableDataset):
-# 	def __init__(self, file_name, map_name):
-# 		JHS.__init__(self, file_name, map_name, 'rc')
-# 		# now deal with iterable dataset things...?
 
-# 	def write_triplet(self, pair_name, plm, cov, pre):
-# 		buff = io.BytesIO()
-# 		torch.save(plm, buff)
-# 		buff.seek(0)
-# 		JHS.write_next_block(self, data=buff.read(), identifier=pair_name+'-PLM')
+class TripletsFormat(BigSmallFormat):
+    @staticmethod
+    def __num_bytes_to_L(num):
+        return int(np.sqrt(num/441/2))
 
-# 		buff = io.BytesIO()
-# 		torch.save(cov, buff)
-# 		buff.seek(0)
-# 		JHS.write_next_block(self, data=buff.read(), identifier=pair_name+'-COV')
+    @staticmethod
+    def __encode(data):
+        # formatted to binary
+        assert type(data) == np.array
+        assert data.dtype == 'float16'
+        assert data.shape[0] == 441
+        assert data.shape[1] == data.shape[2] # 441 x L x L
+        L = data.shape[1]
+        data_bytes = data.tobytes(order='C')
+        assert TripletsFormat.__num_bytes_to_L(len(data_bytes)) == L
+        return data_bytes
 
-# 		buff = io.BytesIO()
-# 		torch.save(pre, buff)
-# 		buff.seek(0)
-# 		JHS.write_next_block(self, data=buff.read(), identifier=pair_name+'-PRE')
+    @staticmethod
+    def __decode(b, identifier):
+        num_bytes = super()._get_num_bytes(identifier)
+        L = TripletsFormat.__num_bytes_to_L(num_bytes)
+        buff = io.BytesIO(b)
+        data = np.frombuffer(buff, dtype='float16').reshape(441, L, L)
+        return data
 
+    def write_next_block(self, data: np.ndarray, identifier: str):
+        b = TripletsFormat.__encode(data)
+        super().write_next_block(b, identifier)
 
-# 	def read_next_triplet(self, map_location='cpu'):
-# 		plm_bytes = super().read_next_block()
-# 		cov_bytes = super().read_next_block()
-# 		pre_bytes = super().read_next_block()
-
-# 		plm = torch.load(f=io.BytesIO(plm_bytes), map_location=map_location)
-# 		cov = torch.load(f=io.BytesIO(cov_bytes), map_location=map_location)
-# 		pre = torch.load(f=io.BytesIO(pre_bytes), map_location=map_location)
+    def read_next_block(self):
+        b, identifier = super().read_next_block()
+        return TripletsFormat.__decode(b, identifier)
