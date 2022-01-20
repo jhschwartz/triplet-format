@@ -160,3 +160,9 @@ class TripletsFormat:
             self.__copy_file_stream.write(data_bytes)
 
         return data_np, identifier
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return self.read_next_np()
